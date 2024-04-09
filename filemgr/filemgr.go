@@ -10,6 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"bbtea/display"
 )
 
 type Model struct {
@@ -281,14 +283,7 @@ func printFile(fi fs.FileInfo) string {
 	if !fi.IsDir() {
 		sz = humanizeSize(fi.Size())
 	}
-	return fmt.Sprintf("%-*s %*s %s", filenameSz, trunc(fi.Name(), filenameSz), filesizeSz, sz, fi.ModTime().Format(dttmLayout))
-}
-
-func trunc(s string, sz int) string {
-	if len(s) > sz {
-		return s[:sz-1] + "…"
-	}
-	return s
+	return fmt.Sprintf("%-*s %*s %s", filenameSz, display.Trunc(fi.Name(), filenameSz), filesizeSz, sz, fi.ModTime().Format(dttmLayout))
 }
 
 func (m Model) View() string {
