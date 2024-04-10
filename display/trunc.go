@@ -8,7 +8,7 @@ func Trunc(s string, sz int) string {
 	}
 	firstCR := strings.Index(s, "\n")
 	if -1 < firstCR && firstCR < sz {
-		return s[:firstCR-1] + "…"
+		return s[:firstCR] + "⏎"
 	}
 	if len(s) > sz {
 		return s[:sz-1] + "…"

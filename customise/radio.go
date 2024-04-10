@@ -49,7 +49,7 @@ func (r RadioButton) View() string {
 	for i, val := range r.choices {
 		cur := "( ) "
 		if i == r.selected {
-			cur = "(o) "
+			cur = "(*) "
 		}
 		fmt.Fprintf(&buf, "%s%s\n", cur, val)
 	}

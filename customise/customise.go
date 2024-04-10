@@ -3,24 +3,33 @@ package customise
 import (
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"bbtea/display"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type Model struct {
 	Items     []Item
-	cursor    int
+	nameColSz int
+	Cursor    string
 	width     int
 	editing   bool
 	edittype  Type
 	finishing bool
+	st        display.State
 	err       error
+	Style     Styles
 	fields
+}
+
+type Styles struct {
+	Normal      lipgloss.Style
+	Selected    lipgloss.Style
+	Description lipgloss.Style
 }
 
 type fields struct {
@@ -29,9 +38,26 @@ type fields struct {
 	radio     RadioButton
 }
 
+var (
+	defStyle = lipgloss.NewStyle()
+)
+
 func NewModel(items []Item) Model {
+	maxNameLen := 0
+	for i := range items {
+		if l := len(items[i].Name()); maxNameLen < l {
+			maxNameLen = l
+		}
+	}
 	return Model{
-		Items: items,
+		Items:     items,
+		nameColSz: maxNameLen,
+		Cursor:    "|>",
+		Style: Styles{
+			Normal:      defStyle,
+			Selected:    defStyle.Copy(),
+			Description: defStyle.Copy().Faint(true),
+		},
 		fields: fields{
 			textarea:  textarea.New(),
 			textinput: textinput.New(),
@@ -55,26 +81,23 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.st.SetMax(msg.Height)
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
 			m.finishing = true
 			return m, tea.Quit
 		case "j", "down":
-			if m.cursor < len(m.Items)-1 {
-				m.cursor++
-			}
+			m.st.Down(len(m.Items))
 		case "k", "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.st.Up()
 		case " ":
-			if m.Items[m.cursor].Type() != TCheckbox {
+			if m.Items[m.st.Cursor].Type() != TCheckbox {
 				break
 			}
 			fallthrough
 		case "enter", "f4":
-			item := m.Items[m.cursor]
+			item := m.Items[m.st.Cursor]
 
 			m.edittype = item.Type()
 			switch m.edittype {
@@ -126,7 +149,7 @@ func (m Model) procMsgEdit(msg tea.Msg) (Model, tea.Cmd) {
 			case TRadio:
 				val = m.radio.Value()
 			}
-			m.Items[m.cursor].Set(val)
+			m.Items[m.st.Cursor].Set(val)
 		}
 	}
 
@@ -163,14 +186,16 @@ func (m Model) selectView() string {
 	if len(m.Items) == 0 {
 		return "No items to show."
 	}
+	var (
+		empty = strings.Repeat(" ", len(m.Cursor))
+	)
 
 	var buf strings.Builder
-	tw := tabwriter.NewWriter(&buf, 0, 4, 4, ' ', 0)
 
 	for i, item := range m.Items {
-		cursor := " "
-		if i == m.cursor {
-			cursor = ">"
+		cursor := empty
+		if m.st.IsSelected(i) {
+			cursor = m.Cursor
 		}
 		value := item.Value()
 		if len(value) == 0 {
@@ -189,17 +214,26 @@ func (m Model) selectView() string {
 		case TRadio:
 			val = "[" + display.Trunc(value, m.width-4) + " ↓]"
 		}
-		fmt.Fprintf(tw, "%s%s\t%v\n", cursor, item.Name(), val)
+		style := m.Style.Normal
+		if m.st.IsSelected(i) {
+			style = m.Style.Selected
+		}
+		fmt.Fprintf(&buf,
+			style.Render("%s%*s  %v")+"\n",
+			cursor,
+			-m.nameColSz,
+			item.Name(),
+			val,
+		)
 	}
-	tw.Flush()
 
 	// description
-	fmt.Fprint(&buf, "\n"+m.Items[m.cursor].Description())
+	fmt.Fprint(&buf, "\n"+m.Style.Description.Render(m.Items[m.st.Cursor].Description()))
 	return buf.String()
 }
 
 func (m Model) editView() string {
-	field := m.Items[m.cursor]
+	item := m.Items[m.st.Cursor]
 
 	var v string
 	switch m.edittype {
@@ -212,5 +246,5 @@ func (m Model) editView() string {
 	default:
 		return "INTERNAL ERROR"
 	}
-	return "--[" + field.Name() + "]------\n" + v + "\n\n" + field.Description()
+	return "--[" + item.Name() + "]------\n" + v + "\n" + m.Style.Description.Render(item.Description())
 }

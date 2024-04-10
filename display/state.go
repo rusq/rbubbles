@@ -58,3 +58,7 @@ func (s *State) SetMax(pgHeight int) {
 func (s *State) Displayed(listLen int) int {
 	return min(listLen, s.Max-s.Min+1)
 }
+
+func (s *State) IsSelected(n int) bool {
+	return s.Cursor == n
+}
