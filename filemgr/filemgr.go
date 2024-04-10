@@ -23,8 +23,8 @@ type Model struct {
 	Style     Style
 	files     []fs.FileInfo
 	finished  bool
-	st        state
-	viewStack stack[state]
+	st        display.State
+	viewStack display.Stack[display.State]
 
 	Debug bool
 	last  string // last key pressed
@@ -47,35 +47,6 @@ func NewModel(dir string, height int, globs ...string) Model {
 			Inverted:  lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("240")),
 		},
 	}
-}
-
-type state struct {
-	cursor   int
-	max, min int
-}
-
-type stack[T any] []T
-
-func (s *stack[T]) Push(v T) {
-	*s = append(*s, v)
-}
-
-func (s *stack[T]) Pop() T {
-	var empty T
-	if len(*s) == 0 {
-		return empty
-	}
-	v := (*s)[len(*s)-1]
-	*s = (*s)[:len(*s)-1]
-	return v
-}
-
-func (s stack[T]) Len() int {
-	return len(s)
-}
-
-func (s stack[T]) Peek() T {
-	return s[len(s)-1]
 }
 
 type wmReadDir struct {
@@ -163,56 +134,26 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.finished = true
 			return m, tea.Quit
 		case "up", "ctrl+p", "k":
-			if m.st.cursor > 0 {
-				m.st.cursor--
-			}
-			if m.st.cursor < m.st.min {
-				m.st.min--
-				m.st.max--
-			}
+			m.st.Up()
 		case "down", "ctrl+n", "j":
-			if m.st.cursor < len(m.files)-1 {
-				m.st.cursor++
-			}
-			if m.st.cursor > m.st.max {
-				m.st.min++
-				m.st.max++
-			}
+			m.st.Down(len(m.files))
 		case "right", "pgdown", "ctrl+v", "ctrl+f":
-			m.st.cursor += m.height()
-			if m.st.cursor > len(m.files)-1 {
-				m.st.cursor = len(m.files) - 1
-			}
-			m.st.min += m.height()
-			m.st.max += m.height()
-			if m.st.max >= len(m.files) {
-				m.st.max = len(m.files) - 1
-				m.st.min = m.st.max - (m.height() - 1)
-			}
+			m.st.NextPg(m.height(), len(m.files))
 		case "left", "pgup", "alt+v", "ctrl+b":
-			m.st.cursor -= m.height()
-			if m.st.cursor < 0 {
-				m.st.cursor = 0
-			}
-			m.st.min -= m.height()
-			m.st.max -= m.height()
-			if m.st.min < 0 {
-				m.st.min = 0
-				m.st.max = m.height() - 1
-			}
+			m.st.PrevPg(m.height())
 		case "ctrl+r":
 			return m, tea.Batch(m.Init())
 		case "enter", "ctrl+m":
 			if len(m.files) == 0 {
 				break
 			}
-			if m.files[m.st.cursor].IsDir() {
-				m.Directory = filepath.Join(m.Directory, m.files[m.st.cursor].Name())
+			if m.files[m.st.Cursor].IsDir() {
+				m.Directory = filepath.Join(m.Directory, m.files[m.st.Cursor].Name())
 				m.viewStack.Push(m.st)
-				m.st = state{}
+				m.st = display.State{}
 				return m, tea.Batch(m.Init())
 			}
-			cmds = append(cmds, selectedCmd(m.Directory, m.files[m.st.cursor]))
+			cmds = append(cmds, selectedCmd(m.Directory, m.files[m.st.Cursor]))
 		case "backspace", "ctrl+h":
 			if m.viewStack.Len() > 0 {
 				m.st = m.viewStack.Pop()
@@ -222,7 +163,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 	case wmReadDir:
 		m.files = msg.files
-		m.st.max = max(m.st.max, m.height()-1)
+		m.st.SetMax(m.height())
 	}
 
 	return m, tea.Batch(cmds...)
@@ -292,9 +233,9 @@ func (m Model) View() string {
 	}
 	var buf strings.Builder
 	if m.Debug {
-		fmt.Fprintf(&buf, "cursor: %d\n", m.st.cursor)
-		fmt.Fprintf(&buf, "min: %d\n", m.st.min)
-		fmt.Fprintf(&buf, "max: %d\n", m.st.max)
+		fmt.Fprintf(&buf, "cursor: %d\n", m.st.Cursor)
+		fmt.Fprintf(&buf, "min: %d\n", m.st.Min)
+		fmt.Fprintf(&buf, "max: %d\n", m.st.Max)
 		fmt.Fprintf(&buf, "last: %q\n", m.last)
 		fmt.Fprintf(&buf, "dir: %q\n", m.Directory)
 		fmt.Fprintf(&buf, "selected: %q\n", m.Selected)
@@ -314,19 +255,19 @@ func (m Model) View() string {
 		}
 	} else {
 		for i, file := range m.files {
-			if i < m.st.min || i > m.st.max {
+			if i < m.st.Min || i > m.st.Max {
 				continue
 			}
 			style := m.Style.Normal
 			if file.IsDir() {
 				style = m.Style.Directory
 			}
-			if i == m.st.cursor {
+			if i == m.st.Cursor {
 				style = m.Style.Inverted
 			}
 			fmt.Fprintln(&buf, style.Render(printFile(file)))
 		}
-		numDisplayed := min(len(m.files), m.st.max-m.st.min+1)
+		numDisplayed := m.st.Displayed(len(m.files))
 		for i := 0; i < m.height()-numDisplayed; i++ {
 			fmt.Fprintln(&buf, m.Style.Normal.Render(strings.Repeat(" ", Width-1)))
 		}
