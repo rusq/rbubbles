@@ -26,6 +26,7 @@ type Model struct {
 type fields struct {
 	textarea  textarea.Model
 	textinput textinput.Model
+	radio     RadioButton
 }
 
 func NewModel(items []Item) Model {
@@ -34,6 +35,7 @@ func NewModel(items []Item) Model {
 		fields: fields{
 			textarea:  textarea.New(),
 			textinput: textinput.New(),
+			radio:     RadioButton{},
 		},
 	}
 }
@@ -71,18 +73,23 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 				break
 			}
 			fallthrough
-		case "enter":
+		case "enter", "f4":
 			item := m.Items[m.cursor]
 
 			m.edittype = item.Type()
 			switch m.edittype {
 			case TMultiline:
+				m.textarea.Reset()
 				m.textarea.SetValue(item.Value())
 				m.textarea.Focus()
 				m.editing = true
 			case TText:
+				m.textinput.Reset()
 				m.textinput.SetValue(item.Value())
 				m.textinput.Focus()
+				m.editing = true
+			case TRadio:
+				m.radio.SetValues(item.AllowedValues(), item.Value())
 				m.editing = true
 			case TCheckbox:
 				if item.Value() == sTrue {
@@ -116,6 +123,8 @@ func (m Model) procMsgEdit(msg tea.Msg) (Model, tea.Cmd) {
 			case TMultiline:
 				m.textarea.Blur()
 				val = m.textarea.Value()
+			case TRadio:
+				val = m.radio.Value()
 			}
 			m.Items[m.cursor].Set(val)
 		}
@@ -128,6 +137,8 @@ func (m Model) procMsgEdit(msg tea.Msg) (Model, tea.Cmd) {
 		m.textinput, cmd = m.textinput.Update(msg)
 	case TMultiline:
 		m.textarea, cmd = m.textarea.Update(msg)
+	case TRadio:
+		m.radio, cmd = m.radio.Update(msg)
 	}
 	cmds = append(cmds, cmd)
 
@@ -167,7 +178,7 @@ func (m Model) selectView() string {
 		}
 		var val string
 		switch item.Type() {
-		case TMultiline, TText, TRadio:
+		case TMultiline, TText:
 			val = display.Trunc(value, m.width)
 		case TCheckbox:
 			if value == sTrue {
@@ -175,6 +186,8 @@ func (m Model) selectView() string {
 			} else {
 				val = "[ ]"
 			}
+		case TRadio:
+			val = "[" + display.Trunc(value, m.width-4) + " ↓]"
 		}
 		fmt.Fprintf(tw, "%s%s\t%v\n", cursor, item.Name(), val)
 	}
@@ -194,6 +207,8 @@ func (m Model) editView() string {
 		v = m.textinput.View()
 	case TMultiline:
 		v = m.textarea.View()
+	case TRadio:
+		v = m.radio.View()
 	default:
 		return "INTERNAL ERROR"
 	}
