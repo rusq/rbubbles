@@ -9,10 +9,16 @@ import (
 func customiseTest() {
 	var testVar string = "Hello, World!"
 	var testInt int = 42
+	var testMultiline string = "Hello world\nMultiline"
+	var testBool bool = true
+	var testRadio string = "foo"
 
 	c := customise.NewModel([]customise.Item{
 		customise.StringVar(&testVar, "TestVar", "This is a test variable", "Test"),
 		customise.IntVar(&testInt, "TestInt", "This is a test integer", "Test"),
+		customise.MultilineVar(&testMultiline, "Multiline test", "This is multiline test string", "Test"),
+		customise.BoolVar(&testBool, "Boolean test", "This is boolean(checkbox) test", "Test"),
+		customise.RadioStringVar(&testRadio, "test choice", "This is test choice", "Test", []string{"foo", "bar"}),
 	})
 	p := tea.NewProgram(custmodel{c})
 	_, err := p.Run()

@@ -8,6 +8,7 @@ import (
 	"bbtea/display"
 
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -16,16 +17,24 @@ type Model struct {
 	cursor    int
 	width     int
 	editing   bool
-	editbox   textarea.Model
+	edittype  Type
 	finishing bool
 	err       error
-	errField  int
+	fields
+}
+
+type fields struct {
+	textarea  textarea.Model
+	textinput textinput.Model
 }
 
 func NewModel(items []Item) Model {
 	return Model{
-		Items:   items,
-		editbox: textarea.New(),
+		Items: items,
+		fields: fields{
+			textarea:  textarea.New(),
+			textinput: textinput.New(),
+		},
 	}
 }
 
@@ -34,46 +43,93 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	if m.editing {
+		return m.procMsgEdit(msg)
+	}
+	return m.procMsgView(msg)
+
+}
+func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 	case tea.KeyMsg:
-		if m.editing {
-			switch msg.String() {
-			case "esc":
-				m.editing = false
-				m.editbox.Blur()
-				m.Items[m.cursor].Set(m.editbox.Value())
+		switch msg.String() {
+		case "q":
+			m.finishing = true
+			return m, tea.Quit
+		case "j", "down":
+			if m.cursor < len(m.Items)-1 {
+				m.cursor++
 			}
-		} else {
-			switch msg.String() {
-			case "q":
-				m.finishing = true
-				return m, tea.Quit
-			case "j", "down":
-				if m.cursor < len(m.Items)-1 {
-					m.cursor++
-				}
-			case "k", "up":
-				if m.cursor > 0 {
-					m.cursor--
-				}
+		case "k", "up":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case " ":
+			if m.Items[m.cursor].Type() != TCheckbox {
+				break
+			}
+			fallthrough
+		case "enter":
+			item := m.Items[m.cursor]
 
-			case "enter":
-				if !m.editing {
-					m.editing = !m.editing
-					m.editbox.SetValue(m.Items[m.cursor].Value())
-					m.editbox.Focus()
+			m.edittype = item.Type()
+			switch m.edittype {
+			case TMultiline:
+				m.textarea.SetValue(item.Value())
+				m.textarea.Focus()
+				m.editing = true
+			case TText:
+				m.textinput.SetValue(item.Value())
+				m.textinput.Focus()
+				m.editing = true
+			case TCheckbox:
+				if item.Value() == sTrue {
+					item.Set(sFalse)
+				} else {
+					item.Set(sTrue)
 				}
 			}
 		}
 	}
-	var cmds []tea.Cmd
-	if m.editing {
-		var cmd tea.Cmd
-		m.editbox, cmd = m.editbox.Update(msg)
-		cmds = append(cmds, cmd)
+	return m, nil
+}
+
+func (m Model) procMsgEdit(msg tea.Msg) (Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			// we only process enter for non-multiline modes
+			if m.edittype == TMultiline {
+				break
+			}
+			fallthrough
+		case "esc":
+			m.editing = false
+			var val string
+			switch m.edittype {
+			case TText:
+				m.textinput.Blur()
+				val = m.textinput.Value()
+			case TMultiline:
+				m.textarea.Blur()
+				val = m.textarea.Value()
+			}
+			m.Items[m.cursor].Set(val)
+		}
 	}
+
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	switch m.edittype {
+	case TText:
+		m.textinput, cmd = m.textinput.Update(msg)
+	case TMultiline:
+		m.textarea, cmd = m.textarea.Update(msg)
+	}
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }
@@ -85,9 +141,14 @@ func (m Model) View() string {
 	if m.err != nil {
 		return m.err.Error()
 	}
-	if m.editing {
-		return m.editbox.View()
+	if m.editing && m.edittype != TCheckbox {
+		return m.editView()
+	} else {
+		return m.selectView()
 	}
+}
+
+func (m Model) selectView() string {
 	if len(m.Items) == 0 {
 		return "No items to show."
 	}
@@ -104,9 +165,37 @@ func (m Model) View() string {
 		if len(value) == 0 {
 			value = "<empty>"
 		}
-		fmt.Fprintf(tw, "%s%s\t%v\n", cursor, item.Name(), display.Trunc(value, m.width))
-		// fmt.Fprintf(&buf, " %s\n",  item.Description())
+		var val string
+		switch item.Type() {
+		case TMultiline, TText, TRadio:
+			val = display.Trunc(value, m.width)
+		case TCheckbox:
+			if value == sTrue {
+				val = "[x]"
+			} else {
+				val = "[ ]"
+			}
+		}
+		fmt.Fprintf(tw, "%s%s\t%v\n", cursor, item.Name(), val)
 	}
 	tw.Flush()
+
+	// description
+	fmt.Fprint(&buf, "\n"+m.Items[m.cursor].Description())
 	return buf.String()
+}
+
+func (m Model) editView() string {
+	field := m.Items[m.cursor]
+
+	var v string
+	switch m.edittype {
+	case TText:
+		v = m.textinput.View()
+	case TMultiline:
+		v = m.textarea.View()
+	default:
+		return "INTERNAL ERROR"
+	}
+	return "--[" + field.Name() + "]------\n" + v + "\n\n" + field.Description()
 }
