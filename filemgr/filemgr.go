@@ -167,6 +167,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.st.NextPg(m.height(), len(m.files))
 		case "left", "pgup", "alt+v", "ctrl+b":
 			m.st.PrevPg(m.height())
+		case "home":
+			m.st.Home(m.height())
+		case "end":
+			m.st.End(m.height(), len(m.files))
 		case "ctrl+r":
 			return m, tea.Batch(m.Init())
 		case "enter", "ctrl+m":
@@ -261,10 +265,10 @@ func (m Model) printDebug(w io.Writer) {
 	fmt.Fprintf(w, "dir: %q\n", m.Directory)
 	fmt.Fprintf(w, "selected: %q\n", m.Selected)
 	for i := range Width {
-		if i%10 == 0 {
+		if n := i % 10; n == 0 {
 			w.Write([]byte{'|'})
 		} else {
-			fmt.Fprint(w, i%10)
+			fmt.Fprint(w, n)
 		}
 	}
 	fmt.Fprintln(w)

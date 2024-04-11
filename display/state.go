@@ -62,3 +62,15 @@ func (s *State) Displayed(listLen int) int {
 func (s *State) IsSelected(n int) bool {
 	return s.Cursor == n
 }
+
+func (s *State) Home(pgHeight int) {
+	s.Cursor = 0
+	s.Min = 0
+	s.Max = pgHeight - 1
+}
+
+func (s *State) End(pgHeight int, listLen int) {
+	s.Cursor = listLen - 1
+	s.Max = listLen - 1
+	s.Min = max(0, listLen-pgHeight)
+}
