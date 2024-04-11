@@ -18,6 +18,9 @@ var testfs = fstest.MapFS{
 	"dir2": &fstest.MapFile{
 		Mode: fs.ModeDir,
 	},
+	"dir2/dirfile.txt": &fstest.MapFile{
+		Data: []byte("dir2/dirfile.txt"),
+	},
 	"file1.txt": &fstest.MapFile{
 		Data: []byte("file1"),
 	},
@@ -134,8 +137,15 @@ func Test_collectDirs(t *testing.T) {
 }
 
 func TestModel_View(t *testing.T) {
-	allFiles := func() []fs.FileInfo {
-		msg := readFS(testfs, ".", "*")
+	allFiles := func(t *testing.T, sub string) []fs.FileInfo {
+		t.Helper()
+		if sub == "" {
+			sub = "."
+		}
+		msg, err := readFS(testfs, sub, "*")
+		if err != nil {
+			t.Fatal(err)
+		}
 		return msg.files
 	}
 
@@ -170,9 +180,9 @@ func TestModel_View(t *testing.T) {
 				st: display.State{
 					Max: len(testfs),
 				},
-				files: allFiles(),
+				files: allFiles(t, "."),
 			},
-			want: "binary1.bin         3B 01-01-0001 00:00\nbinary2.bin         3B 01-01-0001 00:00\nfile1.txt           5B 01-01-0001 00:00\nfile2.txt           5B 01-01-0001 00:00\nfile3.txt           5B 01-01-0001 00:00\ndir1             <DIR> 01-01-0001 00:00\ndir2             <DIR> 01-01-0001 00:00\n",
+			want: "binary1.bin         3B 01-01-0001 00:00\nbinary2.bin         3B 01-01-0001 00:00\nfile1.txt           5B 01-01-0001 00:00\nfile2.txt           5B 01-01-0001 00:00\nfile3.txt           5B 01-01-0001 00:00\ndir1             <DIR> 01-01-0001 00:00\ndir2             <DIR> 01-01-0001 00:00\n                                       \n",
 		},
 		{
 			name: "finished",
@@ -185,10 +195,25 @@ func TestModel_View(t *testing.T) {
 				st: display.State{
 					Max: len(testfs),
 				},
-				files:    allFiles(),
+				files:    allFiles(t, "."),
 				finished: true, // finished!
 			},
 			want: "",
+		},
+		{
+			name: "subdir",
+			fields: fields{
+				Globs:     []string{"*"},
+				Selected:  "file1.txt",
+				FS:        testfs,
+				Directory: "dir2",
+				Height:    len(testfs),
+				st: display.State{
+					Max: len(testfs),
+				},
+				files: allFiles(t, "dir2"),
+			},
+			want: "..               <DIR> 01-01-0001 00:00\ndirfile.txt        16B 01-01-0001 00:00\n                                       \n                                       \n                                       \n                                       \n                                       \n                                       \n",
 		},
 	}
 	for _, tt := range tests {
@@ -209,6 +234,60 @@ func TestModel_View(t *testing.T) {
 				last:      tt.fields.last,
 			}
 			assert.Equal(t, tt.want, m.View())
+		})
+	}
+}
+
+func Test_humanizeSize(t *testing.T) {
+	type args struct {
+		size int64
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "bytes",
+			args: args{
+				size: 3,
+			},
+			want: "    3B",
+		},
+		{
+			name: "kilobytes",
+			args: args{
+				size: 1024,
+			},
+			want: "  1.0K",
+		},
+		{
+			name: "megabytes",
+			args: args{
+				size: 1024 * 1024,
+			},
+			want: "  1.0M",
+		},
+		{
+			name: "gigabytes",
+			args: args{
+				size: 1024 * 1024 * 1024,
+			},
+			want: "  1.0G",
+		},
+		{
+			name: "terabytes",
+			args: args{
+				size: 1024 * 1024 * 1024 * 1024,
+			},
+			want: "  1.0T",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := humanizeSize(tt.args.size); got != tt.want {
+				t.Errorf("humanizeSize() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

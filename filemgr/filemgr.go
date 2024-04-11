@@ -59,27 +59,31 @@ type wmReadDir struct {
 
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
-		return readFS(m.FS, m.Directory, m.Globs...)
+		msg, err := readFS(m.FS, m.Directory, m.Globs...)
+		if err != nil {
+			return err
+		}
+		return msg
 	}
 }
 
-func readFS(fsys fs.FS, dir string, globs ...string) wmReadDir {
+func readFS(fsys fs.FS, dir string, globs ...string) (wmReadDir, error) {
 	sub, err := fs.Sub(fsys, dir)
 	if err != nil {
-		return wmReadDir{dir, nil}
+		return wmReadDir{}, err
 	}
 	dirs, err := collectDirs(sub)
 	if err != nil {
-		return wmReadDir{dir, nil}
+		return wmReadDir{}, err
 	}
 	files, err := collectFiles(sub, globs...)
 	if err != nil {
-		return wmReadDir{dir, nil}
+		return wmReadDir{}, err
 	}
 	if !(dir == "." || dir == "/" || dir == "") {
 		files = append([]fs.FileInfo{specialDir{".."}}, files...)
 	}
-	return wmReadDir{dir, append(files, dirs...)}
+	return wmReadDir{dir, append(files, dirs...)}, nil
 }
 
 func collectFiles(fsys fs.FS, globs ...string) (files []fs.FileInfo, err error) {
@@ -225,7 +229,7 @@ func humanizeSize(size int64) string {
 	case size < T:
 		return fmt.Sprintf("%5.1fG", float64(size)/G)
 	default:
-		return fmt.Sprintf("%5.1fT", float64(size)/G)
+		return fmt.Sprintf("%5.1fT", float64(size)/T)
 
 	}
 }
