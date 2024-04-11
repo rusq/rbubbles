@@ -2,6 +2,7 @@ package filemgr
 
 import (
 	"bbtea/display"
+	"bytes"
 	"io/fs"
 	"reflect"
 	"slices"
@@ -215,6 +216,52 @@ func TestModel_View(t *testing.T) {
 			},
 			want: "..               <DIR> 01-01-0001 00:00\ndirfile.txt        16B 01-01-0001 00:00\n                                       \n                                       \n                                       \n                                       \n                                       \n                                       \n",
 		},
+		{
+			name: "no files found",
+			fields: fields{
+				Globs:     []string{"*.foo"},
+				Selected:  "file1.txt",
+				FS:        testfs,
+				Directory: ".",
+				Height:    2,
+				st: display.State{
+					Max: 2,
+				},
+				files: []fs.FileInfo{},
+			},
+			want: "No files found, press [Backspace]\n                                       \n",
+		},
+		{
+			name: "no files with help",
+			fields: fields{
+				Globs:     []string{"*.foo"},
+				Selected:  "file1.txt",
+				FS:        testfs,
+				Directory: ".",
+				Height:    1,
+				st: display.State{
+					Max: 1,
+				},
+				files:    []fs.FileInfo{},
+				ShowHelp: true,
+			},
+			want: "No files found, press [Backspace]\n\n ↑ ↓ move・[⏎] select・[⇤] back・[q] quit\n",
+		},
+		{
+			name: "window height less than number of files",
+			fields: fields{
+				Globs:     []string{"*"},
+				Selected:  "file1.txt",
+				FS:        testfs,
+				Directory: ".",
+				Height:    2,
+				st: display.State{
+					Max: 1,
+				},
+				files: allFiles(t, "."),
+			},
+			want: "binary1.bin         3B 01-01-0001 00:00\nbinary2.bin         3B 01-01-0001 00:00\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -288,6 +335,57 @@ func Test_humanizeSize(t *testing.T) {
 			if got := humanizeSize(tt.args.size); got != tt.want {
 				t.Errorf("humanizeSize() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestModel_printDebug(t *testing.T) {
+	type fields struct {
+		Globs     []string
+		Selected  string
+		FS        fs.FS
+		Directory string
+		Height    int
+		ShowHelp  bool
+		Style     Style
+		files     []fs.FileInfo
+		finished  bool
+		st        display.State
+		viewStack display.Stack[display.State]
+		Debug     bool
+		last      string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		wantW  string
+	}{
+		{
+			name:   "debug",
+			fields: fields{},
+			wantW:  "cursor: 0\nmin: 0\nmax: 0\nlast: \"\"\ndir: \"\"\nselected: \"\"\n|123456789|123456789|123456789|123456789\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := Model{
+				Globs:     tt.fields.Globs,
+				Selected:  tt.fields.Selected,
+				FS:        tt.fields.FS,
+				Directory: tt.fields.Directory,
+				Height:    tt.fields.Height,
+				ShowHelp:  tt.fields.ShowHelp,
+				Style:     tt.fields.Style,
+				files:     tt.fields.files,
+				finished:  tt.fields.finished,
+				st:        tt.fields.st,
+				viewStack: tt.fields.viewStack,
+				Debug:     tt.fields.Debug,
+				last:      tt.fields.last,
+			}
+			w := &bytes.Buffer{}
+			m.printDebug(w)
+			assert.Equal(t, tt.wantW, w.String())
 		})
 	}
 }
