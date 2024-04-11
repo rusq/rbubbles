@@ -1,6 +1,7 @@
 package filemgr
 
 import (
+	"bbtea/display"
 	"io/fs"
 	"reflect"
 	"slices"
@@ -128,6 +129,86 @@ func Test_collectDirs(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("collectDirs() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestModel_View(t *testing.T) {
+	allFiles := func() []fs.FileInfo {
+		msg := readFS(testfs, ".", "*")
+		return msg.files
+	}
+
+	type fields struct {
+		Globs     []string
+		Selected  string
+		FS        fs.FS
+		Directory string
+		Height    int
+		ShowHelp  bool
+		Style     Style
+		files     []fs.FileInfo
+		finished  bool
+		st        display.State
+		viewStack display.Stack[display.State]
+		Debug     bool
+		last      string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{
+			name: "view",
+			fields: fields{
+				Globs:     []string{"*"},
+				Selected:  "file1.txt",
+				FS:        testfs,
+				Directory: ".",
+				Height:    len(testfs),
+				st: display.State{
+					Max: len(testfs),
+				},
+				files: allFiles(),
+			},
+			want: "binary1.bin         3B 01-01-0001 00:00\nbinary2.bin         3B 01-01-0001 00:00\nfile1.txt           5B 01-01-0001 00:00\nfile2.txt           5B 01-01-0001 00:00\nfile3.txt           5B 01-01-0001 00:00\ndir1             <DIR> 01-01-0001 00:00\ndir2             <DIR> 01-01-0001 00:00\n",
+		},
+		{
+			name: "finished",
+			fields: fields{
+				Globs:     []string{"*"},
+				Selected:  "file1.txt",
+				FS:        testfs,
+				Directory: ".",
+				Height:    len(testfs),
+				st: display.State{
+					Max: len(testfs),
+				},
+				files:    allFiles(),
+				finished: true, // finished!
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := Model{
+				Globs:     tt.fields.Globs,
+				Selected:  tt.fields.Selected,
+				FS:        tt.fields.FS,
+				Directory: tt.fields.Directory,
+				Height:    tt.fields.Height,
+				ShowHelp:  tt.fields.ShowHelp,
+				Style:     tt.fields.Style,
+				files:     tt.fields.files,
+				finished:  tt.fields.finished,
+				st:        tt.fields.st,
+				viewStack: tt.fields.viewStack,
+				Debug:     tt.fields.Debug,
+				last:      tt.fields.last,
+			}
+			assert.Equal(t, tt.want, m.View())
 		})
 	}
 }

@@ -2,10 +2,12 @@ package filemgr
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -57,20 +59,27 @@ type wmReadDir struct {
 
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
-		sub, err := fs.Sub(m.FS, m.Directory)
-		if err != nil {
-			return err
-		}
-		dirs, err := collectDirs(sub)
-		if err != nil {
-			return err
-		}
-		files, err := collectFiles(sub, m.Globs...)
-		if err != nil {
-			return err
-		}
-		return wmReadDir{m.Directory, append(files, dirs...)}
+		return readFS(m.FS, m.Directory, m.Globs...)
 	}
+}
+
+func readFS(fsys fs.FS, dir string, globs ...string) wmReadDir {
+	sub, err := fs.Sub(fsys, dir)
+	if err != nil {
+		return wmReadDir{dir, nil}
+	}
+	dirs, err := collectDirs(sub)
+	if err != nil {
+		return wmReadDir{dir, nil}
+	}
+	files, err := collectFiles(sub, globs...)
+	if err != nil {
+		return wmReadDir{dir, nil}
+	}
+	if !(dir == "." || dir == "/" || dir == "") {
+		files = append([]fs.FileInfo{specialDir{".."}}, files...)
+	}
+	return wmReadDir{dir, append(files, dirs...)}
 }
 
 func collectFiles(fsys fs.FS, globs ...string) (files []fs.FileInfo, err error) {
@@ -240,26 +249,30 @@ func printFile(fi fs.FileInfo) string {
 	return fmt.Sprintf("%-*s %*s %s", filenameSz, display.Trunc(fi.Name(), filenameSz), filesizeSz, sz, fi.ModTime().Format(dttmLayout))
 }
 
+func (m Model) printDebug(w io.Writer) {
+	fmt.Fprintf(w, "cursor: %d\n", m.st.Cursor)
+	fmt.Fprintf(w, "min: %d\n", m.st.Min)
+	fmt.Fprintf(w, "max: %d\n", m.st.Max)
+	fmt.Fprintf(w, "last: %q\n", m.last)
+	fmt.Fprintf(w, "dir: %q\n", m.Directory)
+	fmt.Fprintf(w, "selected: %q\n", m.Selected)
+	for i := range Width {
+		if i%10 == 0 {
+			w.Write([]byte{'|'})
+		} else {
+			fmt.Fprint(w, i%10)
+		}
+	}
+	fmt.Fprintln(w)
+}
+
 func (m Model) View() string {
 	if m.finished {
 		return ""
 	}
 	var buf strings.Builder
 	if m.Debug {
-		fmt.Fprintf(&buf, "cursor: %d\n", m.st.Cursor)
-		fmt.Fprintf(&buf, "min: %d\n", m.st.Min)
-		fmt.Fprintf(&buf, "max: %d\n", m.st.Max)
-		fmt.Fprintf(&buf, "last: %q\n", m.last)
-		fmt.Fprintf(&buf, "dir: %q\n", m.Directory)
-		fmt.Fprintf(&buf, "selected: %q\n", m.Selected)
-		for i := range Width {
-			if i%10 == 0 {
-				buf.WriteByte('|')
-			} else {
-				fmt.Fprint(&buf, i%10)
-			}
-		}
-		fmt.Fprintln(&buf)
+		m.printDebug(&buf)
 	}
 	if len(m.files) == 0 {
 		buf.WriteString(m.Style.Normal.Render("No files found, press [Backspace]") + "\n")
@@ -289,4 +302,32 @@ func (m Model) View() string {
 		buf.WriteString("\n ↑ ↓ move・[⏎] select・[⇤] back・[q] quit\n")
 	}
 	return buf.String()
+}
+
+type specialDir struct {
+	name string
+}
+
+func (s specialDir) Name() string {
+	return s.name
+}
+
+func (s specialDir) Size() int64 {
+	return 0
+}
+
+func (s specialDir) Mode() fs.FileMode {
+	return fs.ModeDir
+}
+
+func (s specialDir) ModTime() time.Time {
+	return time.Time{}
+}
+
+func (s specialDir) IsDir() bool {
+	return true
+}
+
+func (s specialDir) Sys() interface{} {
+	return s
 }
