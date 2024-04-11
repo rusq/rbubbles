@@ -95,6 +95,10 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 			m.st.Down(len(m.Items))
 		case "k", "up":
 			m.st.Up()
+		case "home":
+			m.st.Home(len(m.Items))
+		case "end":
+			m.st.End(len(m.Items), len(m.Items))
 		case " ":
 			if m.Items[m.st.Cursor].Type() != TCheckbox {
 				break
