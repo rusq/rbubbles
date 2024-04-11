@@ -10,7 +10,7 @@ import (
 )
 
 func filebrowser() {
-	fm := filemgr.NewModel(".", 20, "*")
+	fm := filemgr.New(os.DirFS("."), ".", 20, "*")
 	fm.Debug = os.Getenv("DEBUG") != ""
 	p := tea.NewProgram(fmmodel{fm})
 	r, err := p.Run()

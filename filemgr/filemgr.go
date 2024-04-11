@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +16,7 @@ import (
 type Model struct {
 	Globs     []string
 	Selected  string
+	FS        fs.FS
 	Directory string
 	Height    int
 	ShowHelp  bool
@@ -36,9 +36,10 @@ type Style struct {
 	Inverted  lipgloss.Style
 }
 
-func NewModel(dir string, height int, globs ...string) Model {
+func New(fsys fs.FS, dir string, height int, globs ...string) Model {
 	return Model{
 		Globs:     globs,
+		FS:        fsys,
 		Directory: dir,
 		Height:    height,
 		Style: Style{
@@ -56,11 +57,15 @@ type wmReadDir struct {
 
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
-		dirs, err := collectDirs(m.Directory)
+		sub, err := fs.Sub(m.FS, m.Directory)
 		if err != nil {
 			return err
 		}
-		files, err := collectFiles(m.Directory, m.Globs...)
+		dirs, err := collectDirs(sub)
+		if err != nil {
+			return err
+		}
+		files, err := collectFiles(sub, m.Globs...)
 		if err != nil {
 			return err
 		}
@@ -68,12 +73,16 @@ func (m Model) Init() tea.Cmd {
 	}
 }
 
-func collectFiles(dir string, globs ...string) (files []fs.FileInfo, err error) {
-	err = fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+func collectFiles(fsys fs.FS, globs ...string) (files []fs.FileInfo, err error) {
+	err = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() && path != "." {
+		if path == "." {
+			// do not show the current directory
+			return nil
+		}
+		if d.IsDir() {
 			return fs.SkipDir
 		}
 		for _, glob := range globs {
@@ -92,16 +101,16 @@ func collectFiles(dir string, globs ...string) (files []fs.FileInfo, err error) 
 	return
 }
 
-func collectDirs(dir string) ([]fs.FileInfo, error) {
+func collectDirs(fsys fs.FS) ([]fs.FileInfo, error) {
 	var dirs []fs.FileInfo
-	err := fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
+		if path == "." {
+			return nil
+		}
 		if d.IsDir() {
-			if path == "." {
-				return nil
-			}
 			dir, err := d.Info()
 			if err != nil {
 				return err
@@ -127,6 +136,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case error:
 		log.Printf("error: %v", msg)
 		return m, tea.Quit
+	case tea.WindowSizeMsg:
+		if m.Height == 0 {
+			m.Height = msg.Height
+		}
 	case tea.KeyMsg:
 		m.last = msg.String()
 		switch msg.String() {

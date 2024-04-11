@@ -25,6 +25,7 @@ const (
 	TMultiline
 	TRadio
 	TCheckbox // for booleans
+	TFile
 )
 
 type VarWrapper struct {
@@ -143,6 +144,12 @@ func RadioStringVar(value *string, name, descr, group string, choices []string) 
 			return choices
 		},
 	}
+}
+
+func FilenameVar(value *string, name, descr, group string) VarWrapper {
+	v := StringVar(value, name, descr, group)
+	v.ItemType = TFile
+	return v
 }
 
 var (

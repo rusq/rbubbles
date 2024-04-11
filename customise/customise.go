@@ -2,9 +2,11 @@ package customise
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"bbtea/display"
+	"bbtea/filemgr"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -36,6 +38,7 @@ type fields struct {
 	textarea  textarea.Model
 	textinput textinput.Model
 	radio     RadioButton
+	filemgr   filemgr.Model
 }
 
 var (
@@ -52,7 +55,7 @@ func NewModel(items []Item) Model {
 	return Model{
 		Items:     items,
 		nameColSz: maxNameLen,
-		Cursor:    "|>",
+		Cursor:    ">",
 		Style: Styles{
 			Normal:      defStyle,
 			Selected:    defStyle.Copy(),
@@ -62,6 +65,7 @@ func NewModel(items []Item) Model {
 			textarea:  textarea.New(),
 			textinput: textinput.New(),
 			radio:     RadioButton{},
+			filemgr:   filemgr.New(os.DirFS("."), ".", 0, "*"),
 		},
 	}
 }
@@ -114,6 +118,7 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 			case TRadio:
 				m.radio.SetValues(item.AllowedValues(), item.Value())
 				m.editing = true
+			case TFile:
 			case TCheckbox:
 				if item.Value() == sTrue {
 					item.Set(sFalse)
