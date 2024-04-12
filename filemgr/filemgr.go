@@ -187,6 +187,22 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				return m, tea.Batch(m.Init())
 			}
 		}
+		if combo := msg.String(); strings.HasPrefix(combo, "alt+") {
+			_, key, found := strings.Cut(combo, "+")
+			if !found {
+				break
+			}
+			for i, f := range m.files {
+				if strings.HasPrefix(strings.ToLower(f.Name()), key) {
+					if m.last == combo && i <= m.st.Cursor {
+						continue
+					}
+					m.st.Focus(i, m.height(), len(m.files))
+					break
+				}
+			}
+		}
+
 	case wmReadDir:
 		m.files = msg.files
 		m.st.SetMax(m.height())

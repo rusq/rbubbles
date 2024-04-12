@@ -51,6 +51,12 @@ func (s *State) PrevPg(pgHeight int) {
 	}
 }
 
+func (s *State) Focus(i int, pgHeight int, listLen int) {
+	s.Cursor = i
+	s.Min = max(0, i-pgHeight/2)
+	s.Max = min(listLen-1, s.Min+pgHeight-1)
+}
+
 func (s *State) SetMax(pgHeight int) {
 	s.Max = max(s.Max, pgHeight-1)
 }
