@@ -2,6 +2,7 @@ package customise
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -71,7 +72,8 @@ func NewModel(items []Item) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	slog.Debug("customise.init")
+	return tea.Batch(m.filemgr.Init())
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
@@ -79,8 +81,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m.procMsgEdit(msg)
 	}
 	return m.procMsgView(msg)
-
 }
+
 func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
@@ -123,7 +125,9 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 				m.editing = true
 			case TFileExisting:
 				m.editing = true
+				m.filemgr.Focus()
 				cmds = append(cmds, m.filemgr.Init())
+				m.filemgr.Select(item.Value())
 			case TCheckbox:
 				if item.Value() == sTrue {
 					item.Set(sFalse)
@@ -165,6 +169,13 @@ OUTER:
 				val = m.textarea.Value()
 			case TRadio:
 				val = m.radio.Value()
+			case TFileExisting:
+				if m.filemgr.Selected == "" {
+					val = m.Items[m.st.Cursor].Value()
+				} else {
+					val = m.filemgr.Selected
+				}
+				m.filemgr.Blur()
 			}
 			m.Items[m.st.Cursor].Set(val)
 		}

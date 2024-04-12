@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -25,6 +25,7 @@ type Model struct {
 	Style     Style
 	files     []fs.FileInfo
 	finished  bool
+	focus     bool
 	st        display.State
 	viewStack display.Stack[display.State]
 
@@ -37,6 +38,20 @@ type Style struct {
 	Directory lipgloss.Style
 	Inverted  lipgloss.Style
 }
+
+// Messages
+type (
+	// WMSelected message is sent by the file manager when a file is selected.
+	WMSelected struct {
+		Filepath string
+		IsDir    bool
+	}
+
+	wmReadDir struct {
+		dir   string
+		files []fs.FileInfo
+	}
+)
 
 func New(fsys fs.FS, dir string, height int, globs ...string) Model {
 	return Model{
@@ -52,17 +67,15 @@ func New(fsys fs.FS, dir string, height int, globs ...string) Model {
 	}
 }
 
-type wmReadDir struct {
-	dir   string
-	files []fs.FileInfo
-}
-
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg {
+		slog.Debug("init", "dir", m.Directory, "globs", m.Globs)
 		msg, err := readFS(m.FS, m.Directory, m.Globs...)
 		if err != nil {
+			slog.Error("readFS", "err", err)
 			return err
 		}
+		slog.Debug("readFS", "msg", msg)
 		return msg
 	}
 }
@@ -144,15 +157,26 @@ func (m Model) height() int {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	if !m.focus {
+		return m, nil
+	}
 	var cmds []tea.Cmd
+	slog.Debug("filemanager.Update", "msg", msg)
 	switch msg := msg.(type) {
 	case error:
-		log.Printf("error: %v", msg)
+		slog.Error("error message", "msg", msg)
 	case tea.WindowSizeMsg:
 		if m.Height == 0 {
 			m.Height = msg.Height
 		}
+	case wmReadDir:
+		slog.Debug("wmReadDir", "dir", msg.dir)
+		m.files = msg.files
+		m.st.SetMax(m.height())
 	case tea.KeyMsg:
+		if !m.focus {
+			break
+		}
 		m.last = msg.String()
 		switch msg.String() {
 		case "up", "ctrl+p", "k":
@@ -203,9 +227,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		}
 
-	case wmReadDir:
-		m.files = msg.files
-		m.st.SetMax(m.height())
 	}
 
 	return m, tea.Batch(cmds...)
@@ -218,11 +239,6 @@ func selectedCmd(dir string, fi fs.FileInfo) tea.Cmd {
 			IsDir:    fi.IsDir(),
 		}
 	}
-}
-
-type WMSelected struct {
-	Filepath string
-	IsDir    bool
 }
 
 // humanizeSize returns a human-readable string representing a file size.
@@ -322,6 +338,23 @@ func (m Model) View() string {
 		buf.WriteString("\n ↑ ↓ move・[⏎] select・[⇤] back・[q] quit\n")
 	}
 	return buf.String()
+}
+
+func (m *Model) Select(filename string) {
+	for i, f := range m.files {
+		if f.Name() == filename {
+			m.st.Focus(i, m.height(), len(m.files))
+			break
+		}
+	}
+}
+
+func (m *Model) Focus() {
+	m.focus = true
+}
+
+func (m *Model) Blur() {
+	m.focus = false
 }
 
 type specialDir struct {
