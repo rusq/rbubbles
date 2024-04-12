@@ -148,7 +148,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case error:
 		log.Printf("error: %v", msg)
-		return m, tea.Quit
 	case tea.WindowSizeMsg:
 		if m.Height == 0 {
 			m.Height = msg.Height
@@ -156,9 +155,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m.last = msg.String()
 		switch msg.String() {
-		case "ctrl+c", "q":
-			m.finished = true
-			return m, tea.Quit
 		case "up", "ctrl+p", "k":
 			m.st.Up()
 		case "down", "ctrl+n", "j":

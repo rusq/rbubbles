@@ -55,10 +55,10 @@ func NewModel(items []Item) Model {
 	return Model{
 		Items:     items,
 		nameColSz: maxNameLen,
-		Cursor:    ">",
+		Cursor:    "",
 		Style: Styles{
 			Normal:      defStyle,
-			Selected:    defStyle.Copy(),
+			Selected:    defStyle.Copy().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("7")),
 			Description: defStyle.Copy().Faint(true),
 		},
 		fields: fields{
@@ -82,15 +82,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 }
 func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.st.SetMax(msg.Height)
+		m.filemgr.Height = 10
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q":
-			m.finishing = true
-			return m, tea.Quit
 		case "j", "down":
 			m.st.Down(len(m.Items))
 		case "k", "up":
@@ -122,7 +121,9 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 			case TRadio:
 				m.radio.SetValues(item.AllowedValues(), item.Value())
 				m.editing = true
-			case TFile:
+			case TFileExisting:
+				m.editing = true
+				cmds = append(cmds, m.filemgr.Init())
 			case TCheckbox:
 				if item.Value() == sTrue {
 					item.Set(sFalse)
@@ -132,17 +133,24 @@ func (m Model) procMsgView(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		}
 	}
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) procMsgEdit(msg tea.Msg) (Model, tea.Cmd) {
+OUTER:
 	switch msg := msg.(type) {
+	case filemgr.WMSelected:
+		if !msg.IsDir {
+			m.Items[m.st.Cursor].Set(msg.Filepath)
+			m.editing = false
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
 			// we only process enter for non-multiline modes
-			if m.edittype == TMultiline {
-				break
+			switch m.edittype {
+			case TMultiline, TFileExisting:
+				break OUTER
 			}
 			fallthrough
 		case "esc":
@@ -171,6 +179,8 @@ func (m Model) procMsgEdit(msg tea.Msg) (Model, tea.Cmd) {
 		m.textarea, cmd = m.textarea.Update(msg)
 	case TRadio:
 		m.radio, cmd = m.radio.Update(msg)
+	case TFileExisting:
+		m.filemgr, cmd = m.filemgr.Update(msg)
 	}
 	cmds = append(cmds, cmd)
 
@@ -212,7 +222,7 @@ func (m Model) selectView() string {
 		}
 		var val string
 		switch item.Type() {
-		case TMultiline, TText:
+		case TMultiline, TText, TFileExisting:
 			val = display.Trunc(value, m.width)
 		case TCheckbox:
 			if value == sTrue {
@@ -252,6 +262,8 @@ func (m Model) editView() string {
 		v = m.textarea.View()
 	case TRadio:
 		v = m.radio.View()
+	case TFileExisting:
+		v = m.filemgr.View()
 	default:
 		return "INTERNAL ERROR"
 	}

@@ -26,6 +26,7 @@ const (
 	TRadio
 	TCheckbox // for booleans
 	TFile
+	TFileExisting
 )
 
 type VarWrapper struct {
@@ -146,9 +147,12 @@ func RadioStringVar(value *string, name, descr, group string, choices []string) 
 	}
 }
 
-func FilenameVar(value *string, name, descr, group string) VarWrapper {
+func FilenameVar(value *string, name, descr, group string, mustexist bool) VarWrapper {
 	v := StringVar(value, name, descr, group)
 	v.ItemType = TFile
+	if mustexist {
+		v.ItemType = TFileExisting
+	}
 	return v
 }
 
