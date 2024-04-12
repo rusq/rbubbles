@@ -156,6 +156,11 @@ func (m Model) height() int {
 	return m.Height
 }
 
+func (m *Model) populate(files []fs.FileInfo) {
+	m.files = files
+	m.st.SetMax(m.height())
+}
+
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.focus {
 		return m, nil
@@ -171,8 +176,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 	case wmReadDir:
 		slog.Debug("wmReadDir", "dir", msg.dir)
-		m.files = msg.files
-		m.st.SetMax(m.height())
+		m.populate(msg.files)
 	case tea.KeyMsg:
 		if !m.focus {
 			break
@@ -341,6 +345,14 @@ func (m Model) View() string {
 }
 
 func (m *Model) Select(filename string) {
+	if len(m.files) == 0 {
+		w, err := readFS(m.FS, m.Directory, m.Globs...)
+		if err != nil {
+			slog.Error("readFS", "err", err)
+			return
+		}
+		m.populate(w.files)
+	}
 	for i, f := range m.files {
 		if f.Name() == filename {
 			m.st.Focus(i, m.height(), len(m.files))
