@@ -16,7 +16,6 @@ func main() {
 	slog.SetDefault(slog.New(
 		slog.NewTextHandler(f, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug}),
 	))
-	// sample()
 	// wiztest()
 	// filebrowser()
 	customiseTest()

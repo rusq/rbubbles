@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"bbtea/filemgr"
+	"github.com/rusq/rbubbles/filemgr"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

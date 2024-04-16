@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bbtea/customise"
+	"github.com/rusq/rbubbles/customise"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

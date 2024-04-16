@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"bbtea/display"
-	"bbtea/filemgr"
+	"github.com/rusq/rbubbles/display"
+	"github.com/rusq/rbubbles/filemgr"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"

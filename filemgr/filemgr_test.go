@@ -1,13 +1,14 @@
 package filemgr
 
 import (
-	"bbtea/display"
 	"bytes"
 	"io/fs"
 	"reflect"
 	"slices"
 	"testing"
 	"testing/fstest"
+
+	"github.com/rusq/rbubbles/display"
 
 	"github.com/stretchr/testify/assert"
 )

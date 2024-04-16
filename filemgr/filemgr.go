@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"bbtea/display"
+	"github.com/rusq/rbubbles/display"
 )
 
 type Model struct {
@@ -339,7 +339,7 @@ func (m Model) View() string {
 		}
 	}
 	if m.ShowHelp {
-		buf.WriteString("\n ↑ ↓ move・[⏎] select・[⇤] back・[q] quit\n")
+		buf.WriteString("\n ↑↓ move•[⏎] select•[⇤] back•[q] quit\n")
 	}
 	return buf.String()
 }
