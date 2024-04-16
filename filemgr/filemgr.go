@@ -59,6 +59,7 @@ func New(fsys fs.FS, dir string, height int, globs ...string) Model {
 		FS:        fsys,
 		Directory: dir,
 		Height:    height,
+		focus:     false,
 		Style: Style{
 			Normal:    lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
 			Directory: lipgloss.NewStyle().Foreground(lipgloss.Color("7")),
@@ -162,9 +163,17 @@ func (m *Model) populate(files []fs.FileInfo) {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	// we only care about wmReadDir messages if we're not focused.
+	switch msg := msg.(type) {
+	case wmReadDir:
+		slog.Debug("wmReadDir", "dir", msg.dir)
+		m.populate(msg.files)
+	}
+
 	if !m.focus {
 		return m, nil
 	}
+
 	var cmds []tea.Cmd
 	slog.Debug("filemanager.Update", "msg", msg)
 	switch msg := msg.(type) {
@@ -174,9 +183,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if m.Height == 0 {
 			m.Height = msg.Height
 		}
-	case wmReadDir:
-		slog.Debug("wmReadDir", "dir", msg.dir)
-		m.populate(msg.files)
 	case tea.KeyMsg:
 		if !m.focus {
 			break
